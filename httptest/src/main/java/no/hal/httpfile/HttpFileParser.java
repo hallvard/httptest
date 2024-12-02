@@ -11,6 +11,7 @@ import no.hal.httpfile.HttpFile.Property;
 import no.hal.httpfile.HttpFile.Request;
 import no.hal.httpfile.HttpFile.Model;
 import no.hal.httpfile.HttpFile.Variable;
+import no.hal.httpfile.HttpFile.StringTemplate.Part;
 import no.hal.httpfile.HttpFileParser.Token.HeaderLine;
 import no.hal.httpfile.HttpFileParser.Token.PropertyLine;
 import no.hal.httpfile.HttpFileParser.Token.RequestLine;
@@ -118,6 +119,16 @@ public class HttpFileParser {
                 return new HeaderLine(line.substring(0, pos).trim(), line.substring(pos + 1).trim());
             }
         }
+
+        record ResourceRefLine(String path) implements Token {
+            static boolean matches(String line) {
+                return line.startsWith("< ");
+            }
+            static ResourceRefLine of(String line) {
+                int pos = line.indexOf(" ");
+                return new ResourceRefLine(line.substring(pos + 1).trim());
+            }
+        }
     }
 
     class Builder {
@@ -127,6 +138,25 @@ public class HttpFileParser {
         List<Variable> variables;
         RequestLine requestLine;
         List<Header> headers;
+        Body body;
+
+        public void acceptRequest() {
+            Request request = new Request(
+                variables,
+                properties,
+                requestLine.verb(),
+                HttpFile.StringTemplate.of(requestLine.target()),
+                requestLine.version(),
+                headers,
+                body
+            );
+            requests.add(request);
+            variables = null;
+            properties = null;
+            requestLine = null;
+            headers = null;
+            body = null;
+        }
     }
 
     record Next(String line, State state) {
@@ -219,31 +249,30 @@ public class HttpFileParser {
                 builder.headers = headers.stream()
                     .map(headerLine -> new Header(headerLine.name(), HttpFile.StringTemplate.of(headerLine.value())))
                     .toList();
-                return new Next(line, new BodyLines(new StringBuilder()));
+                return new Next(null, new BodyLines(new ArrayList<>(), new StringBuilder()));
             }
         }
 
-        record BodyLines(StringBuilder bodyLines) implements State {
+        record BodyLines(List<Part> allParts, StringBuilder bodyLines) implements State {
+            private void consumeBodyLines() {
+                if (bodyLines != null && !bodyLines.isEmpty()) {
+                    allParts.addAll(HttpFile.StringTemplate.of(bodyLines.toString()).parts());
+                    bodyLines.setLength(0);
+                }
+            }
             @Override
             public Next next(String line, Builder builder) {
                 if (Token.matchesEnd(line) || Token.matchesBlank(line)) {
-                    var body = (bodyLines == null || bodyLines.isEmpty() ? null :
-                        new Body(null, HttpFile.StringTemplate.of(bodyLines.toString())));
-                    Request request = new Request(
-                        builder.variables,
-                        builder.properties,
-                        builder.requestLine.verb(),
-                        HttpFile.StringTemplate.of(builder.requestLine.target()),
-                        builder.requestLine.version(),
-                        builder.headers,
-                        body
-                    );
-                    builder.variables = null;
-                    builder.properties = null;
-                    builder.requestLine = null;
-                    builder.headers = null;
-                    builder.requests.add(request);
+                    consumeBodyLines();
+                    if (!allParts.isEmpty()) {
+                        builder.body = new Body(null, new HttpFile.StringTemplate(allParts));
+                    }
+                    builder.acceptRequest();
                     return new Next(null, new RequestSeparator());
+                } else if (Token.ResourceRefLine.matches(line)) {
+                    consumeBodyLines();
+                    allParts.add(new Part.ResourceRef(Token.ResourceRefLine.of(line).path()));
+                    return new Next(null, this);
                 } else {
                     if (bodyLines.length() > 0) {
                         bodyLines.append("\n");

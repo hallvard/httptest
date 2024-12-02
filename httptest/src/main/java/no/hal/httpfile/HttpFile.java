@@ -25,10 +25,15 @@ public interface HttpFile {
         public StringTemplate(Part... parts) {
             this(List.of(parts));
         }
-        
+
         public sealed interface Part {
             public record Constant(String value) implements Part {}
-            public record VariableRef(String variable) implements Part {}
+            public record VariableRef(String name) implements Part {}
+            public record FunctionCall(String name, List<String> args) implements Part {
+                public FunctionCall(String name, String... args) {
+                    this(name, List.of(args));
+                }
+            }
             public record ResourceRef(String resource) implements Part {}
         }
         
@@ -47,8 +52,18 @@ public interface HttpFile {
                     }
                     // add intermediate static part
                     parts.add(new Part.Constant(s.substring(pos, varStart)));
-                    // add variable part
-                    parts.add(new Part.VariableRef(s.substring(varStart + 2, varEnd)));
+                    // add function or variable part
+                    if (s.charAt(varStart + 2) == '$') {
+                        var nameEnd = s.indexOf(' ', varStart + 3);
+                        if (nameEnd < 0) {
+                            nameEnd = varEnd;
+                        }
+                        String name = s.substring(varStart + 3, nameEnd);
+                        String[] args = (nameEnd < varEnd ? s.substring(nameEnd, varEnd).trim().split(" +") : new String[0]);
+                        parts.add(new Part.FunctionCall(name, args));
+                    } else {
+                        parts.add(new Part.VariableRef(s.substring(varStart + 2, varEnd)));
+                    }
                 }
                 pos = varEnd + 2;
             }

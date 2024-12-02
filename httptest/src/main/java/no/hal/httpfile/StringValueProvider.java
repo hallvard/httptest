@@ -11,7 +11,7 @@ public interface StringValueProvider {
 
     public String getStringValue(String name);
 
-    public record Variables(Iterable<Variable> variables, StringTemplateValueProvider templateValueProvider) implements StringValueProvider {
+    public record Variables(Iterable<Variable> variables, StringTemplateResolver templateValueProvider) implements StringValueProvider {
         @Override
         public String getStringValue(String name) {
             for (var variable : variables) {

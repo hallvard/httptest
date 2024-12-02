@@ -35,16 +35,16 @@ public class HttpTestClient implements AutoCloseable {
 
     public Map<String, Object> performRequests(HttpFile.Model requests) {
         Map<String, Object> results = new HashMap<>();
-        var stringTemplateValueProvider = new StringTemplateValueProvider();
-        stringTemplateValueProvider.setInputStreamProvider(inputStreamProvider);
+        var stringTemplateResolver = new StringTemplateResolver();
+        stringTemplateResolver.setInputStreamProvider(inputStreamProvider);
         for (var request : requests.requests()) {
             StringValueProvider stringValueProvider = new StringValueProvider.Providers(
-                new StringValueProvider.Variables(request.requestVariables(), stringTemplateValueProvider),
+                new StringValueProvider.Variables(request.requestVariables(), stringTemplateResolver),
                 new StringValueProvider.MapEntries(results)
             );
-            stringTemplateValueProvider.setStringValueProvider(stringValueProvider);
+            stringTemplateResolver.setStringValueProvider(stringValueProvider);
             try {
-                var result = performRequest(request, stringTemplateValueProvider);
+                var result = performRequest(request, stringTemplateResolver);
                 var requestName = request.getRequestPropertyValue("name");
                 if (requestName.isPresent()) {
                     results.put(requestName.get(), result);
@@ -58,14 +58,14 @@ public class HttpTestClient implements AutoCloseable {
     }
 
     public Map<String, Object> performRequest(HttpFile.Request request) {
-        var stringTemplateValueProvider = new StringTemplateValueProvider();
-        stringTemplateValueProvider.setInputStreamProvider(inputStreamProvider);
-        var stringValueProvider = new StringValueProvider.Variables(request.requestVariables(), stringTemplateValueProvider);
-        stringTemplateValueProvider.setStringValueProvider(stringValueProvider);
-        return performRequest(request, stringTemplateValueProvider);
+        var stringTemplateResolver = new StringTemplateResolver();
+        stringTemplateResolver.setInputStreamProvider(inputStreamProvider);
+        var stringValueProvider = new StringValueProvider.Variables(request.requestVariables(), stringTemplateResolver);
+        stringTemplateResolver.setStringValueProvider(stringValueProvider);
+        return performRequest(request, stringTemplateResolver);
     }
 
-    private Map<String, Object> performRequest(HttpFile.Request request, StringTemplateValueProvider templateResolver) {
+    private Map<String, Object> performRequest(HttpFile.Request request, StringTemplateResolver templateResolver) {
         var builder = HttpRequest.newBuilder(URI.create(templateResolver.toString(request.target())));
         for (var header : request.headers()) {
             builder.header(header.name(), templateResolver.toString(header.value()));
@@ -108,15 +108,4 @@ public class HttpTestClient implements AutoCloseable {
         } catch (Exception ioe) {
         }
     }
-
-    /*
-    {{$guid}}
-    {{$randomInt min max}}
-    {{$timestamp [offset option]}}
-    {{$datetime rfc1123|iso8601 [offset option]}}
-    {{$localDatetime rfc1123|iso8601 [offset option]}}
-    {{$processEnv [%]envVarName}}
-    {{$dotenv [%]variableName}}
-    {{$aadToken [new] [public|cn|de|us|ppe] [<domain|tenantId>] [aud:<domain|tenantId>]}}
-     */
 }
