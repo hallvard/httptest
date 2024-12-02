@@ -1,4 +1,4 @@
-package no.hal.httptest;
+package no.hal.httpfile;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -16,60 +16,43 @@ public interface HttpFile {
         }
     }
 
-    public interface StringValue {
-        public String toString(StringValueProvider valueProvider);
-    }
-
-    public record StringConstant(String constant) implements StringValue {
-        public String toString(StringValueProvider valueProvider) {
-            return constant;
-        }
-    }
-
     /**
      * A string value split into alternating static and variable part.
      * Starts with string contents.
      */
-    public record StringTemplate(List<String> parts) implements StringValue {
-        public StringTemplate(String... part) {
-            this(List.of(part));
+    public record StringTemplate(List<Part> parts) {
+        
+        public StringTemplate(Part... parts) {
+            this(List.of(parts));
         }
-
+        
+        public sealed interface Part {
+            public record Constant(String value) implements Part {}
+            public record VariableRef(String variable) implements Part {}
+            public record ResourceRef(String resource) implements Part {}
+        }
+        
         public static StringTemplate of(String s) {
-            List<String> parts = new ArrayList<>();
+            List<Part> parts = new ArrayList<>();
             int pos = 0;
             while (pos < s.length()) {
                 int varStart = s.indexOf("{{", pos), varEnd = s.indexOf("}}", varStart + 1); // works even if varStart = -1
                 if (varStart < 0) {
                     // add final static part
-                    parts.add(s.substring(pos));
+                    parts.add(new Part.Constant(s.substring(pos)));
                     break;
                 } else {
                     if (varEnd < 0) {
                         throw new IllegalArgumentException("{{ without }}");
                     }
                     // add intermediate static part
-                    parts.add(s.substring(pos, varStart));
+                    parts.add(new Part.Constant(s.substring(pos, varStart)));
                     // add variable part
-                    parts.add(s.substring(varStart + 2, varEnd));
+                    parts.add(new Part.VariableRef(s.substring(varStart + 2, varEnd)));
                 }
                 pos = varEnd + 2;
             }
             return new StringTemplate(parts);
-        }
-
-        public String toString(StringValueProvider valueProvider) {
-            StringBuilder buffer = new StringBuilder();
-            for (int i = 0; i < parts.size(); i++) {
-                var s = parts.get(i);
-                if (i % 2 == 1) {
-                    s = valueProvider.getStringValue(s);
-                }
-                if (s != null) {
-                    buffer.append(s);
-                }
-            }
-            return buffer.toString();
         }
     }
 
@@ -98,12 +81,9 @@ public interface HttpFile {
     /**
      * A variable declaration.
      */
-    public record Variable(String name, StringTemplate value) implements Named<StringTemplate>, StringValue {
+    public record Variable(String name, StringTemplate value) implements Named<StringTemplate> {
         public Variable(String name, String value) {
             this(name, StringTemplate.of(value));
-        }
-        public String toString(StringValueProvider valueProvider) {
-            return value.toString(valueProvider);
         }
     }
 

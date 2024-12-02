@@ -1,25 +1,22 @@
-package no.hal.httptest;
+package no.hal.httpfile;
 
+import java.io.FileInputStream;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
-import no.hal.httptest.HttpFile.Variable;
+import no.hal.httpfile.HttpFile.Variable;
 
-public interface StringValueProvider extends Function<String, String> {
+public interface StringValueProvider {
 
-    String getStringValue(String name);
+    public String getStringValue(String name);
 
-    default String apply(String name) {
-        return getStringValue(name);
-    }
-
-    public record Variables(Iterable<Variable> variables) implements StringValueProvider {
+    public record Variables(Iterable<Variable> variables, StringTemplateValueProvider templateValueProvider) implements StringValueProvider {
         @Override
         public String getStringValue(String name) {
             for (var variable : variables) {
                 if (name.equals(variable.name())) {
-                    return variable.value().toString(this);
+                    return templateValueProvider.toString(variable.value());
                 }
             }
             return null;
@@ -27,6 +24,7 @@ public interface StringValueProvider extends Function<String, String> {
     }
 
     public record MapEntries(Map<String, ? extends Object> map) implements StringValueProvider {
+
         private static Object getValue1(String name, Map<String, ? extends Object> map) {
             for (var entry : map.entrySet()) {
                 if (name.equals(entry.getKey())) {
@@ -36,6 +34,7 @@ public interface StringValueProvider extends Function<String, String> {
             }
             return null;
         }
+
         public static Object getValue(String name, Map<String, ? extends Object> entries) {
             int pos = 0;
             while (pos < name.length()) {
@@ -66,14 +65,32 @@ public interface StringValueProvider extends Function<String, String> {
         }
     }
 
-    public record Functions(Iterable<Function<String, String>> functions) implements StringValueProvider {
-        public Functions(Function<String, String>... functions) {
-            this(List.of(functions));
+    public record Properties(java.util.Properties properties) implements StringValueProvider {
+
+        public static Properties of(Path path) {
+            var props = new java.util.Properties();
+            try (var inputStream = new FileInputStream(path.toFile())) {
+                props.load(inputStream);
+                return new Properties(props);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Exception when loading properties from " + path + "; " + e, e);
+            }
+        }
+
+        @Override
+        public String getStringValue(String name) {
+            return properties.getProperty(name);
+        }
+    }
+
+    public record Providers(Iterable<StringValueProvider> providers) implements StringValueProvider {
+        public Providers(StringValueProvider... providers) {
+            this(List.of(providers));
         }
         @Override
         public String getStringValue(String name) {
-            for (var function : functions) {
-                var value = function.apply(name);
+            for (var provider : providers) {
+                var value = provider.getStringValue(name);
                 if (value != null) {
                     return value.toString();
                 }

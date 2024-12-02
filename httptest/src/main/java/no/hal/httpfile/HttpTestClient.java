@@ -1,4 +1,4 @@
-package no.hal.httptest;
+package no.hal.httpfile;
 
 import java.io.IOException;
 import java.net.URI;
@@ -13,11 +13,13 @@ import java.util.Map;
 
 public class HttpTestClient implements AutoCloseable {
     
+    private InputStreamProvider inputStreamProvider;
     private HttpClient httpClient;
 
     public HttpTestClient() {
+        this.inputStreamProvider = new InputStreamProvider.Default();
         var builder = HttpClient.newBuilder();
-        httpClient = builder.build();
+        this.httpClient = builder.build();
     }
 
     @Override
@@ -33,13 +35,16 @@ public class HttpTestClient implements AutoCloseable {
 
     public Map<String, Object> performRequests(HttpFile.Model requests) {
         Map<String, Object> results = new HashMap<>();
+        var stringTemplateValueProvider = new StringTemplateValueProvider();
+        stringTemplateValueProvider.setInputStreamProvider(inputStreamProvider);
         for (var request : requests.requests()) {
-            var stringValueProvider = new StringValueProvider.Functions(
-                new StringValueProvider.Variables(request.requestVariables()),
+            StringValueProvider stringValueProvider = new StringValueProvider.Providers(
+                new StringValueProvider.Variables(request.requestVariables(), stringTemplateValueProvider),
                 new StringValueProvider.MapEntries(results)
             );
+            stringTemplateValueProvider.setStringValueProvider(stringValueProvider);
             try {
-                var result = performRequest(request, stringValueProvider);
+                var result = performRequest(request, stringTemplateValueProvider);
                 var requestName = request.getRequestPropertyValue("name");
                 if (requestName.isPresent()) {
                     results.put(requestName.get(), result);
@@ -53,15 +58,19 @@ public class HttpTestClient implements AutoCloseable {
     }
 
     public Map<String, Object> performRequest(HttpFile.Request request) {
-        return performRequest(request, new StringValueProvider.Variables(request.requestVariables()));
+        var stringTemplateValueProvider = new StringTemplateValueProvider();
+        stringTemplateValueProvider.setInputStreamProvider(inputStreamProvider);
+        var stringValueProvider = new StringValueProvider.Variables(request.requestVariables(), stringTemplateValueProvider);
+        stringTemplateValueProvider.setStringValueProvider(stringValueProvider);
+        return performRequest(request, stringTemplateValueProvider);
     }
 
-    private Map<String, Object> performRequest(HttpFile.Request request, StringValueProvider valueProvider) {
-        var builder = HttpRequest.newBuilder(URI.create(request.target().toString(valueProvider)));
+    private Map<String, Object> performRequest(HttpFile.Request request, StringTemplateValueProvider templateResolver) {
+        var builder = HttpRequest.newBuilder(URI.create(templateResolver.toString(request.target())));
         for (var header : request.headers()) {
-            builder.header(header.name(), header.value().toString(valueProvider));
+            builder.header(header.name(), templateResolver.toString(header.value()));
         }
-        builder.method(request.method().name(), BodyPublishers.ofString(request.body().content().toString(valueProvider)));
+        builder.method(request.method().name(), BodyPublishers.ofString(templateResolver.toString(request.body().content())));
         var httpRequest = builder.build();
         
         var requestMap = Map.of(
@@ -94,9 +103,20 @@ public class HttpTestClient implements AutoCloseable {
         try (var testClient = new HttpTestClient()) {
             for (var request : requests.requests()) {
                 System.out.println(request.requestVariables());
-                testClient.performRequest(request, new StringValueProvider.Variables(request.requestVariables()));
+                testClient.performRequest(request);
             }
         } catch (Exception ioe) {
         }
     }
+
+    /*
+    {{$guid}}
+    {{$randomInt min max}}
+    {{$timestamp [offset option]}}
+    {{$datetime rfc1123|iso8601 [offset option]}}
+    {{$localDatetime rfc1123|iso8601 [offset option]}}
+    {{$processEnv [%]envVarName}}
+    {{$dotenv [%]variableName}}
+    {{$aadToken [new] [public|cn|de|us|ppe] [<domain|tenantId>] [aud:<domain|tenantId>]}}
+     */
 }

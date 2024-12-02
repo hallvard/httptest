@@ -1,20 +1,20 @@
-package no.hal.httptest;
+package no.hal.httpfile;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import no.hal.httptest.HttpFile.Body;
-import no.hal.httptest.HttpFile.Header;
-import no.hal.httptest.HttpFile.HttpMethod;
-import no.hal.httptest.HttpFile.Property;
-import no.hal.httptest.HttpFile.Request;
-import no.hal.httptest.HttpFile.Model;
-import no.hal.httptest.HttpFile.Variable;
-import no.hal.httptest.HttpFileParser.Token.HeaderLine;
-import no.hal.httptest.HttpFileParser.Token.PropertyLine;
-import no.hal.httptest.HttpFileParser.Token.RequestLine;
-import no.hal.httptest.HttpFileParser.Token.VariableLine;
+import no.hal.httpfile.HttpFile.Body;
+import no.hal.httpfile.HttpFile.Header;
+import no.hal.httpfile.HttpFile.HttpMethod;
+import no.hal.httpfile.HttpFile.Property;
+import no.hal.httpfile.HttpFile.Request;
+import no.hal.httpfile.HttpFile.Model;
+import no.hal.httpfile.HttpFile.Variable;
+import no.hal.httpfile.HttpFileParser.Token.HeaderLine;
+import no.hal.httpfile.HttpFileParser.Token.PropertyLine;
+import no.hal.httpfile.HttpFileParser.Token.RequestLine;
+import no.hal.httpfile.HttpFileParser.Token.VariableLine;
 
 public class HttpFileParser {
     
